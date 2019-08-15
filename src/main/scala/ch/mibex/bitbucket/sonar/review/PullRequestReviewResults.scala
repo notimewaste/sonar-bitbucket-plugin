@@ -6,20 +6,23 @@ import ch.mibex.bitbucket.sonar.utils.{SonarUtils, StringUtils}
 import org.sonar.api.batch.postjob.issue.PostJobIssue
 import org.sonar.api.batch.rule.Severity
 
-import scala.collection.mutable
+import scala.collection.immutable.HashMap
 
 
 class PullRequestReviewResults(pluginConfiguration: SonarBBPluginConfig) {
-  private val newIssuesBySeverity = new mutable.HashMap[Severity, Int]().withDefaultValue(0)
+  private var newIssuesBySeverity: Map[Severity, Int] = HashMap().withDefaultValue(0)
 
   def issueFound(issue: PostJobIssue): Unit = {
-    newIssuesBySeverity(issue.severity()) += 1
+    newIssuesBySeverity += (issue.severity() -> (newIssuesBySeverity(issue.severity()) + 1))
   }
 
-  def calculateBuildStatus(): BuildStatus =
-    if (canBeApproved) SuccessfulBuildstatus
-    else FailingBuildStatus(numCritical = newIssuesBySeverity(Severity.CRITICAL),
-                            numBlocker = newIssuesBySeverity(Severity.BLOCKER))
+  def calculateBuildStatus(): BuildStatus = {
+    val issuesWithAboveMaxSeverity = countIssuesWithAboveMaxSeverity
+    if (issuesWithAboveMaxSeverity == 0)
+      SuccessfulBuildstatus
+    else
+      FailingBuildStatus(Severity.valueOf(pluginConfiguration.sonarApprovalSeverityLevel()), issuesWithAboveMaxSeverity)
+  }
 
   def formatAsMarkdown(): String = {
     val markdown = new StringBuilder()
@@ -49,10 +52,14 @@ class PullRequestReviewResults(pluginConfiguration: SonarBBPluginConfig) {
     )
   }
 
-  def canBeApproved: Boolean =
-    // there does not seam to be a way to check the quality gates in preview mode, so we make an assumption about
-    // what users would consider good quality here :-)
-    newIssuesBySeverity(Severity.CRITICAL) == 0 && newIssuesBySeverity(Severity.BLOCKER) == 0
+  def countIssuesWithAboveMaxSeverity: Int = {
+    val level = Severity.valueOf(pluginConfiguration.sonarApprovalSeverityLevel())
+    val allLevels = Severity.values()
+    val maxIndexLevel = allLevels.indexOf(level)
+    newIssuesBySeverity
+      .filter { case(severity, numIssues) => allLevels.indexOf(severity) >= maxIndexLevel }
+      .foldLeft(0)(_ + _._2)
+  }
 
   private def printNewIssuesForMarkdown(sb: StringBuilder, severity: Severity) = {
     val issueCount = newIssuesBySeverity(severity)

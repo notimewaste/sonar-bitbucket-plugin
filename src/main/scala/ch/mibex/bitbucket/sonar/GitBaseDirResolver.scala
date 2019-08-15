@@ -4,7 +4,7 @@ import java.io.File
 
 import org.sonar.api.batch.fs.InputFile
 import org.sonar.api.batch.postjob.issue.PostJobIssue
-import org.sonar.api.batch.{BatchSide, InstantiationStrategy}
+import org.sonar.api.batch.{ScannerSide, InstantiationStrategy}
 import org.sonar.api.scan.filesystem.PathResolver
 
 import scala.annotation.tailrec
@@ -12,7 +12,7 @@ import scala.annotation.tailrec
 // this class is necessary because Sonar's InputFile#relativePath does not work if the working directory of the Sonar
 // build is not the same as the repository root; in this case, we have to go up in the directory until we find
 // the git root (.git folder)
-@BatchSide
+@ScannerSide
 @InstantiationStrategy(InstantiationStrategy.PER_BATCH)
 class GitBaseDirResolver {
   private var gitBaseDir: File = _
@@ -36,10 +36,8 @@ class GitBaseDirResolver {
   @tailrec
   private def findRepositoryBaseDir(optBaseDir: Option[File], gitDirName: String): Option[File] = optBaseDir match {
     case Some(baseDir) =>
-      if (new File(baseDir, gitDirName).exists()) {
-        return optBaseDir
-      }
-      findRepositoryBaseDir(Option(baseDir.getParentFile), gitDirName)
+      if (new File(baseDir, gitDirName).exists()) optBaseDir
+      else findRepositoryBaseDir(Option(baseDir.getParentFile), gitDirName)
     case None => None
   }
 

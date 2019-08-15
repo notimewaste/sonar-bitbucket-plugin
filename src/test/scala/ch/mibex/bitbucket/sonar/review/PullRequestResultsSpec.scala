@@ -4,6 +4,7 @@ import ch.mibex.bitbucket.sonar.{SonarBBPlugin, SonarBBPluginConfig}
 import org.junit.runner.RunWith
 import org.sonar.api.batch.postjob.issue.PostJobIssue
 import org.sonar.api.batch.rule.Severity
+import org.sonar.api.config.internal.MapSettings
 import org.sonar.api.config.{PropertyDefinitions, Settings}
 import org.sonar.api.platform.Server
 import org.sonar.api.rule.RuleKey
@@ -15,7 +16,7 @@ import org.specs2.specification.Scope
 class PullRequestResultsSpec extends Specification with Mockito {
 
   class SettingsContext extends Scope {
-    val settings = new Settings(new PropertyDefinitions(classOf[SonarBBPlugin]))
+    val settings = new MapSettings(new PropertyDefinitions(classOf[SonarBBPlugin]))
     val server = mock[Server]
     val pluginConfig = new SonarBBPluginConfig(settings, server)
   }
@@ -28,7 +29,7 @@ class PullRequestResultsSpec extends Specification with Mockito {
         """**SonarQube Analysis** reported no issues. Take a chocolate :-)
           |
           |Note that only issues with severity >= ![MAJOR](https://raw.githubusercontent.com/mibexsoftware/sonar-bitbucket-plugin/master/src/main/resources/images/severity/MAJOR.png) (major) are reported.""".stripMargin
-      results.canBeApproved must beTrue
+      results.countIssuesWithAboveMaxSeverity must_== 0
     }
 
     "yield issue report for found issues and deny approval due to blocker issue" in new SettingsContext {
@@ -63,7 +64,7 @@ class PullRequestResultsSpec extends Specification with Mockito {
           |Watch the comments in this pull request to review them. Note that only issues with severity >=
           |![MAJOR](https://raw.githubusercontent.com/mibexsoftware/sonar-bitbucket-plugin/master/src/main/resources/images/severity/MAJOR.png) (major)
           |are reported.""".stripMargin).ignoreSpace
-      results.canBeApproved must beFalse
+      results.countIssuesWithAboveMaxSeverity must_== 1 // default is CRITICAL
     }
 
   }

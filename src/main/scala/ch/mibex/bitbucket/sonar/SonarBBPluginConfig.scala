@@ -2,11 +2,11 @@ package ch.mibex.bitbucket.sonar
 
 import ch.mibex.bitbucket.sonar.utils.SonarUtils
 import org.sonar.api.batch.rule.Severity
-import org.sonar.api.batch.{BatchSide, InstantiationStrategy}
+import org.sonar.api.batch.{InstantiationStrategy, ScannerSide}
 import org.sonar.api.config.Settings
 import org.sonar.api.platform.Server
 
-@BatchSide
+@ScannerSide
 @InstantiationStrategy(InstantiationStrategy.PER_BATCH)
 class SonarBBPluginConfig(settings: Settings, server: Server) {
 
@@ -30,6 +30,8 @@ class SonarBBPluginConfig(settings: Settings, server: Server) {
 
   def buildStatusEnabled(): Boolean = settings.getBoolean(SonarBBPlugin.BitbucketBuildStatus)
 
+  def sonarApprovalSeverityLevel(): String = settings.getString(SonarBBPlugin.SonarUnapprovalSeverityLevel)
+
   def branchName(): String = {
     var branchName = settings.getString(SonarBBPlugin.BitbucketBranchName)
     Option(branchName) foreach { _ =>
@@ -46,10 +48,10 @@ class SonarBBPluginConfig(settings: Settings, server: Server) {
   private def branchIllegalCharReplacement() = // we cannot use "" as defaultValue with SonarQube settings
     Option(settings.getString(SonarBBPlugin.SonarQubeIllegalBranchCharReplacement)).getOrElse("")
 
-  def validate(): Unit = {
+  def validateOrThrow(): Unit = {
     require(
-      Option(server.getVersion).isEmpty || server.getVersion != "5.1",
-      s"${SonarBBPlugin.PluginLogPrefix} SonarQube v5.1 is not supported because of issue SONAR-6398"
+      Option(server.getVersion).isEmpty || !server.getVersion.startsWith("7.7"),
+      s"${SonarBBPlugin.PluginLogPrefix} SonarQube v7.7 is not supported because of required preview mode"
     )
     require(
       SonarUtils.isValidBranchNameReplacement(branchIllegalCharReplacement()),
@@ -62,7 +64,7 @@ class SonarBBPluginConfig(settings: Settings, server: Server) {
     )
     require(
       isValidAuthenticationGiven,
-      s"""${SonarBBPlugin.PluginLogPrefix} Either the name and API key for the Bitbucket team account
+      s"""${SonarBBPlugin.PluginLogPrefix} Either the user name and APP pasword for your Bitbucket account
         |or an OAuth client key and its secret must be given""".stripMargin.replaceAll("\n", " ")
     )
     Option(minSeverity()) foreach { severity =>

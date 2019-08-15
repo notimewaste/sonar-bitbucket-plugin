@@ -3,7 +3,7 @@ package ch.mibex.bitbucket.sonar
 
 import ch.mibex.bitbucket.sonar.client.BitbucketClient
 import ch.mibex.bitbucket.sonar.diff.IssuesOnChangedLinesFilter
-import ch.mibex.bitbucket.sonar.review.{PullRequestProjectBuilder, ReviewCommentsCreator, SonarReviewPostJob}
+import ch.mibex.bitbucket.sonar.review.{PullRequestProjectBuilder, ReviewCommentsHandler, SonarReviewPostJob}
 import org.sonar.api.Plugin.Context
 import org.sonar.api.{PropertyType, _}
 import org.sonar.api.rule.Severity
@@ -23,6 +23,7 @@ object SonarBBPlugin {
   final val BitbucketOAuthClientSecret = "sonar.bitbucket.oauthClientSecret"
   final val BitbucketApproveUnapprove = "sonar.bitbucket.approvalFeatureEnabled"
   final val BitbucketBuildStatus = "sonar.bitbucket.buildStatusEnabled"
+  final val SonarUnapprovalSeverityLevel = "sonar.bitbucket.maxSeverityApprovalLevel"
 }
 
 
@@ -43,16 +44,16 @@ object SonarBBPlugin {
     ),
     new Property(
       key = SonarBBPlugin.BitbucketTeamName,
-      name = "Bitbucket team ID",
-      description = "If you want to create pull request comments for Sonar issues under your team account, " +
-        "provide the team ID here.",
+      name = "Bitbucket user name",
+      description = "If you want to create pull request comments for Sonar issues with an APP password, " +
+        "provide your user name here.",
       global = false
     ),
     new Property(
       key = SonarBBPlugin.BitbucketApiKey,
-      name = "Bitbucket API key",
-      description = "If you want to create pull request comments for Sonar issues under your team account, " +
-        "provide the API key for your team account here.",
+      name = "Bitbucket APP password",
+      description = "If you want to create pull request comments for Sonar issues with an APP password, " +
+        "provide the APP password here.",
       `type` = PropertyType.PASSWORD,
       global = false
     ),
@@ -103,10 +104,18 @@ object SonarBBPlugin {
     ),
     new Property(
       key = SonarBBPlugin.BitbucketApproveUnapprove,
-      name = "Approve / Unapprove pull request if there are critical or blocker issues.",
+      name = "Approve / Unapprove pull request if there are issues with severity >= " +
+        SonarBBPlugin.SonarUnapprovalSeverityLevel + ".",
       defaultValue = "true",
-      description = "If enabled, the plug-in will approve the pull request if there are no critical and no " +
-        "blocker issues, otherwise it will unapprove the pull request.",
+      description = "If enabled, the plug-in will approve the pull request if there are no issues with severity >= " +
+        SonarBBPlugin.SonarUnapprovalSeverityLevel + ", otherwise it will unapprove the pull request.",
+      global = true
+    ),
+    new Property(
+      key = SonarBBPlugin.SonarUnapprovalSeverityLevel,
+      name = "The severity level to look for to determine to Auto-Unapprove",
+      defaultValue = Severity.CRITICAL,
+      description = "If any issues of this level or higher are found, it will unapprove the pull request.",
       global = true
     ),
     new Property(
@@ -127,7 +136,7 @@ class SonarBBPlugin extends Plugin {
       classOf[SonarBBPluginConfig],
       classOf[PullRequestProjectBuilder],
       classOf[BitbucketClient],
-      classOf[ReviewCommentsCreator],
+      classOf[ReviewCommentsHandler],
       classOf[IssuesOnChangedLinesFilter],
       classOf[GitBaseDirResolver]
     )
